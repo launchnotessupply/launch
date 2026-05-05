@@ -1,6 +1,33 @@
 (function () {
   "use strict";
 
+  function initializeSwipers() {
+    const swiperElements = document.querySelectorAll('[data-slider="slider"]');
+
+    if (swiperElements.length === 0) {
+      return;
+    }
+
+    swiperElements.forEach((element, index) => {
+      initializeSwiper(element, index);
+    });
+  }
+
+  function initializeWhenReady() {
+    if (typeof Swiper === "undefined") {
+      setTimeout(initializeWhenReady, 50);
+      return;
+    }
+
+    initializeSwipers();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeWhenReady);
+  } else {
+    initializeWhenReady();
+  }
+
   function getSwiperConfig(element) {
     const componentWrapper =
       element.closest('[data-slider="component"]') || element;
