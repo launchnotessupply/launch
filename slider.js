@@ -28,9 +28,96 @@
     initializeWhenReady();
   }
 
+  let resizeTimeout;
+  let lastWidth = window.innerWidth;
+
+  function handleResize() {
+    clearTimeout(resizeTimeout);
+
+    resizeTimeout = setTimeout(() => {
+      const currentWidth = window.innerWidth;
+
+      if (currentWidth !== lastWidth) {
+        lastWidth = currentWidth;
+
+        if (window.AttributesSwiper && window.AttributesSwiper.reinitialize) {
+          window.AttributesSwiper.reinitialize();
+        }
+      }
+    }, 250);
+  }
+
+  window.addEventListener("resize", handleResize);
+
+  function initializeSwiper(element, index) {
+    try {
+      processWebflowCMSLists(element);
+
+      const config = getSwiperConfig(element);
+      const swiper = new Swiper(element, config);
+
+      element.swiperInstance = swiper;
+
+      setupHeightCalculation(element, swiper);
+    } catch (error) {
+      if (typeof console !== "undefined" && console.error) {
+        console.error("Swiper initialization failed:", error);
+      }
+    }
+  }
+
+  function setupHeightCalculation(element, swiper) {
+    function updateSliderHeight() {
+      const slides = element.querySelectorAll(".swiper-slide");
+      if (slides.length === 0) return;
+
+      let maxHeight = 0;
+
+      slides.forEach((slide) => {
+        slide.style.height = "auto";
+
+        const slideHeight = slide.offsetHeight;
+
+        if (slideHeight > maxHeight) {
+          maxHeight = slideHeight;
+        }
+      });
+
+      if (maxHeight > 0) {
+        element.style.height = maxHeight + "px";
+      }
+    }
+
+    updateSliderHeight();
+
+    swiper.on("slideChange", updateSliderHeight);
+    swiper.on("slideChangeTransitionEnd", updateSliderHeight);
+    swiper.on("touchEnd", updateSliderHeight);
+    swiper.on("resize", updateSliderHeight);
+  }
+
+  function processWebflowCMSLists(element) {
+    const webflowSelectors = [".w-dyn-list", ".w-dyn-items", ".w-dyn-item"];
+
+    webflowSelectors.forEach((selector) => {
+      const webflowElements = element.querySelectorAll(selector);
+
+      webflowElements.forEach((webflowElement) => {
+        const children = Array.from(webflowElement.childNodes);
+
+        children.forEach((child) => {
+          webflowElement.parentNode.insertBefore(child, webflowElement);
+        });
+
+        webflowElement.remove();
+      });
+    });
+  }
+
   function getSwiperConfig(element) {
     const componentWrapper =
       element.closest('[data-slider="component"]') || element;
+
     const computedStyle = getComputedStyle(componentWrapper);
 
     const xsColumns =
@@ -122,12 +209,14 @@
       config.loopFillGroupWithBlank = true;
 
       const loopAdditionalSlides = element.dataset.loopAdditionalSlides;
+
       if (loopAdditionalSlides && !isNaN(loopAdditionalSlides)) {
         config.loopAdditionalSlides = parseInt(loopAdditionalSlides, 10);
       }
     }
 
     const autoplayDelay = element.dataset.autoplay;
+
     if (autoplayDelay && autoplayDelay !== "false" && !isNaN(autoplayDelay)) {
       config.autoplay = {
         delay: parseInt(autoplayDelay, 10),
@@ -147,10 +236,45 @@
     }
 
     const speed = element.dataset.speed;
+
     if (speed && !isNaN(speed)) {
       config.speed = parseInt(speed, 10);
     }
 
     return config;
   }
+
+  window.AttributesSwiper = {
+    reinitialize: function () {
+      if (typeof Swiper === "undefined") return;
+
+      const swiperElements = document.querySelectorAll(
+        '[data-slider="slider"]',
+      );
+
+      swiperElements.forEach((element) => {
+        if (element.swiperInstance) {
+          element.swiperInstance.destroy(true, true);
+        }
+      });
+
+      setTimeout(() => {
+        swiperElements.forEach((element, index) => {
+          initializeSwiper(element, index);
+        });
+      }, 50);
+    },
+
+    getInstance: function (index) {
+      const swiperElements = document.querySelectorAll(
+        '[data-slider="slider"]',
+      );
+
+      if (swiperElements[index] && swiperElements[index].swiperInstance) {
+        return swiperElements[index].swiperInstance;
+      }
+
+      return null;
+    },
+  };
 })();
