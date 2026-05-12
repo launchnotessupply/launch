@@ -57,7 +57,7 @@
       tabMenu.getAttribute("data-tabs-autoplay-duration"),
     );
     let autoplayDuration =
-      Number.isFinite(parsedAutoplayDuration) && parsedAutoplayDuration > 0
+      isFinite(parsedAutoplayDuration) && parsedAutoplayDuration > 0
         ? parsedAutoplayDuration
         : 5;
     let autoplayHoverPause =
@@ -117,7 +117,6 @@
       for (let i = 0; i < tabPanesArray.length; i++) {
         const isActive = i === index;
         tabPanesArray[i].setAttribute("aria-hidden", !isActive);
-        tabPanesArray[i].hidden = !isActive;
         tabPanesArray[i].classList.toggle("cc-active", isActive);
       }
 
@@ -387,15 +386,15 @@
     /**
      * Pause autoplay
      */
-    function pauseAutoplay(reason = "user") {
-      setAutoplayPauseReason(reason, true);
+    function pauseAutoplay(reason) {
+      setAutoplayPauseReason(reason || "user", true);
     }
 
     /**
      * Resume autoplay
      */
-    function resumeAutoplay(reason = "user") {
-      setAutoplayPauseReason(reason, false);
+    function resumeAutoplay(reason) {
+      setAutoplayPauseReason(reason || "user", false);
     }
 
     /**
