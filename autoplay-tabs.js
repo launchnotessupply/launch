@@ -1,5 +1,31 @@
 (function () {
   "use strict";
+  const MOBILE_BREAKPOINT = 767;
+  const ACTIVE_CLASS = "cc-active";
+  const AUTOPLAY_PROGRESS_CLASS = "autoplay-tabs_progress";
+
+  function isMobileTabsViewport() {
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  }
+
+  function shouldDisableTabsOnMobile(component) {
+    return (
+      component.getAttribute("data-tabs-disable-mobile") === "true" &&
+      isMobileTabsViewport()
+    );
+  }
+
+  function enableMobileDisabledState(component) {
+    component.setAttribute("data-tabs-mobile-disabled-active", "true");
+
+    component.querySelectorAll("[data-tabs-pane]").forEach((pane) => {
+      pane.setAttribute("aria-hidden", "false");
+    });
+  }
+
+  function disableMobileDisabledState(component) {
+    component.removeAttribute("data-tabs-mobile-disabled-active");
+  }
 
   /**
    * Initialize a single tabs component
@@ -50,6 +76,11 @@
     let autoplayToggleButton = component.querySelector(
       "[data-tabs-autoplay-toggle]",
     );
+    const autoplayProgressList = component.querySelector(
+      "[data-tabs-autoplay-progress-list]",
+    );
+    let autoplayProgressButtons = [];
+    let autoplayProgressTemplate = null;
 
     // Autoplay state
     let autoplayEnabled = tabMenu.getAttribute("data-tabs-autoplay") === "true";
@@ -106,7 +137,7 @@
         const isActive = isActiveStates[i];
 
         link.setAttribute("aria-selected", isActive);
-        link.classList.toggle("cc-active", isActive);
+        link.classList.toggle(ACTIVE_CLASS, isActive);
 
         if (overlays[i]) {
           overlays[i].setAttribute("tabindex", isActive ? "0" : "-1");
@@ -117,10 +148,11 @@
       for (let i = 0; i < tabPanesArray.length; i++) {
         const isActive = i === index;
         tabPanesArray[i].setAttribute("aria-hidden", !isActive);
-        tabPanesArray[i].classList.toggle("cc-active", isActive);
+        tabPanesArray[i].classList.toggle(ACTIVE_CLASS, isActive);
       }
 
       currentActiveIndex = index;
+      updateAutoplayProgressButtons(index);
 
       // Update dropdown toggle text if it exists
       if (dropdownText && isMobileDropdown) {
@@ -213,7 +245,7 @@
       // Set initial text to active tab
       const activeLink =
         component.querySelector('[data-tabs-link][aria-selected="true"]') ||
-        component.querySelector("[data-tabs-link].cc-active") ||
+        component.querySelector(`[data-tabs-link].${ACTIVE_CLASS}`) ||
         tabLinksArray[0];
       if (dropdownText && activeLink) {
         const activeTabName = activeLink.getAttribute("data-tab-link-name");
@@ -264,13 +296,150 @@
      * Setup autoplay progress bars
      */
     function setupAutoplayProgressBars() {
-      if (!autoplayEnabled) return;
-
       // Set CSS variable for duration
       component.style.setProperty(
         "--autoplay-duration",
         `${autoplayDuration}s`,
       );
+
+      if (!autoplayProgressList) return;
+
+      const storedTemplate =
+        autoplayProgressList.__autoplayTabsProgressTemplate;
+      const templateSource =
+        storedTemplate ||
+        autoplayProgressList.querySelector(`.${AUTOPLAY_PROGRESS_CLASS}`) ||
+        autoplayProgressList.querySelector("[data-tabs-autoplay-progress]") ||
+        autoplayProgressList.firstElementChild;
+
+      if (templateSource && !storedTemplate) {
+        autoplayProgressList.__autoplayTabsProgressTemplate =
+          templateSource.cloneNode(true);
+      }
+
+      autoplayProgressTemplate =
+        autoplayProgressList.__autoplayTabsProgressTemplate || null;
+      autoplayProgressButtons = tabLinksArray.map(createAutoplayProgressButton);
+
+      autoplayProgressList.replaceChildren(...autoplayProgressButtons);
+
+      autoplayProgressButtons.forEach((button, index) => {
+        const clickHandler = function (e) {
+          e.preventDefault();
+          setActiveTab(index);
+        };
+
+        button.addEventListener("click", clickHandler);
+        eventListeners.push({
+          element: button,
+          type: "click",
+          handler: clickHandler,
+        });
+
+        if (button.tagName !== "BUTTON") {
+          const keydownHandler = function (e) {
+            if (e.key !== "Enter" && e.key !== " ") return;
+
+            e.preventDefault();
+            setActiveTab(index);
+          };
+
+          button.addEventListener("keydown", keydownHandler);
+          eventListeners.push({
+            element: button,
+            type: "keydown",
+            handler: keydownHandler,
+          });
+        }
+      });
+    }
+
+    /**
+     * Create one autoplay progress button for a tab link
+     */
+    function createAutoplayProgressButton(tabLink, index) {
+      const button = autoplayProgressTemplate
+        ? autoplayProgressTemplate.cloneNode(true)
+        : document.createElement("button");
+      const label = getTabLabel(tabLink, index);
+
+      button.removeAttribute("id");
+      button.classList.add(AUTOPLAY_PROGRESS_CLASS);
+      button.classList.remove(ACTIVE_CLASS);
+      button.setAttribute("data-tabs-autoplay-progress", "");
+      button.setAttribute("data-tabs-autoplay-progress-index", index);
+      button.setAttribute("aria-label", `Show ${label} tab`);
+      button.removeAttribute("aria-current");
+
+      if (button.tagName === "BUTTON") {
+        button.setAttribute("type", "button");
+      } else {
+        button.setAttribute("role", "button");
+        button.setAttribute("tabindex", "0");
+      }
+
+      return button;
+    }
+
+    /**
+     * Get an accessible label for generated progress buttons
+     */
+    function getTabLabel(tabLink, index) {
+      const tabName = tabLink.getAttribute("data-tab-link-name");
+      const label = tabName || tabLink.textContent || `Tab ${index + 1}`;
+
+      return label.trim().replace(/\s+/g, " ") || `Tab ${index + 1}`;
+    }
+
+    /**
+     * Sync generated progress buttons to the active tab
+     */
+    function updateAutoplayProgressButtons(index) {
+      if (!autoplayProgressButtons.length) return;
+
+      for (let i = 0; i < autoplayProgressButtons.length; i++) {
+        const button = autoplayProgressButtons[i];
+        const isActive = i === index;
+
+        button.classList.toggle(ACTIVE_CLASS, isActive);
+
+        if (isActive) {
+          button.setAttribute("aria-current", "true");
+        } else {
+          button.removeAttribute("aria-current");
+        }
+      }
+    }
+
+    /**
+     * Restart the active progress pseudo-element animation
+     */
+    function restartAutoplayProgress(index) {
+      const progressButton = autoplayProgressButtons[index];
+
+      if (progressButton) {
+        progressButton.classList.remove(ACTIVE_CLASS);
+        // Force style recalculation so ::before/::after animations restart.
+        void progressButton.offsetWidth;
+        progressButton.classList.add(ACTIVE_CLASS);
+        progressButton.setAttribute("aria-current", "true");
+        return;
+      }
+
+      // Backwards compatibility for older markup with a progress child in the tab.
+      const activeLink = tabLinksArray[index];
+      const progressBar = activeLink.querySelector(
+        "[data-tabs-autoplay-progress]",
+      );
+
+      if (progressBar) {
+        progressBar.style.animation = "none";
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            progressBar.style.animation = "";
+          });
+        });
+      }
     }
 
     /**
@@ -313,21 +482,7 @@
       // Reset elapsed time
       autoplayElapsedTime = 0;
 
-      // Remove and re-add animation to restart it
-      const activeLink = tabLinksArray[currentActiveIndex];
-      const progressBar = activeLink.querySelector(
-        "[data-tabs-autoplay-progress]",
-      );
-
-      if (progressBar) {
-        // Use requestAnimationFrame for smoother animation restart
-        progressBar.style.animation = "none";
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            progressBar.style.animation = "";
-          });
-        });
-      }
+      restartAutoplayProgress(currentActiveIndex);
 
       startAutoplay();
     }
@@ -413,7 +568,10 @@
             }
           };
 
-          document.addEventListener("visibilitychange", visibilityChangeHandler);
+          document.addEventListener(
+            "visibilitychange",
+            visibilityChangeHandler,
+          );
           eventListeners.push({
             element: document,
             type: "visibilitychange",
@@ -509,7 +667,7 @@
 
       // Check for cc-active class
       const customActiveIndex = tabLinksArray.findIndex((link) =>
-        link.classList.contains("cc-active"),
+        link.classList.contains(ACTIVE_CLASS),
       );
       if (customActiveIndex !== -1) {
         return customActiveIndex;
@@ -649,6 +807,13 @@
       clearTimeout(resizeTimer);
       resizeTimer = null;
 
+      if (autoplayProgressButtons.length) {
+        autoplayProgressButtons.forEach((button) => {
+          button.remove();
+        });
+        autoplayProgressButtons = [];
+      }
+
       if (component.__autoplayTabsCleanup === cleanup) {
         delete component.__autoplayTabsCleanup;
       }
@@ -713,20 +878,52 @@
    * Initialize all tabs components on the page
    */
   function initAllTabs() {
-    // Re-query for tabs components in case they were added dynamically
     const components = document.querySelectorAll("[data-tabs-component]");
 
     if (!components.length) {
       return;
     }
 
-    components.forEach(initTabsComponent);
+    components.forEach((component) => {
+      if (shouldDisableTabsOnMobile(component)) {
+        const existingCleanup =
+          component.__autoplayTabsCleanup || component.__tabsCleanup;
+
+        if (typeof existingCleanup === "function") {
+          existingCleanup();
+          delete component.__tabsCleanup;
+        }
+
+        enableMobileDisabledState(component);
+        return;
+      }
+
+      disableMobileDisabledState(component);
+      initTabsComponent(component);
+    });
   }
 
   // Wait for DOM to be fully loaded before initializing
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initAllTabs);
-  } else {
+  let globalResizeTimer = null;
+
+  function setupGlobalResizeHandler() {
+    window.addEventListener("resize", function () {
+      clearTimeout(globalResizeTimer);
+
+      globalResizeTimer = setTimeout(() => {
+        initAllTabs();
+      }, 150);
+    });
+  }
+
+  function startTabsScript() {
     initAllTabs();
+    setupGlobalResizeHandler();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startTabsScript);
+  } else {
+    startTabsScript();
   }
 })();
