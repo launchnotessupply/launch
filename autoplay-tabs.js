@@ -41,6 +41,14 @@
     return queryScoped(component, selector)[0] || null;
   }
 
+  function isAutoplayProgressElement(element) {
+    return (
+      element &&
+      (element.hasAttribute("data-tabs-autoplay-progress") ||
+        element.classList.contains(AUTOPLAY_PROGRESS_CLASS))
+    );
+  }
+
   /**
    * Initialize a single tabs component
    */
@@ -96,12 +104,38 @@
       component,
       "[data-tabs-autoplay-toggle]",
     );
-    const autoplayProgressList = queryScopedFirst(
+    let autoplayProgressList = queryScopedFirst(
       component,
       "[data-tabs-autoplay-progress-list]",
     );
     let autoplayProgressButtons = [];
-    let autoplayProgressTemplate = null;
+    let autoplayProgressTemplate = queryScopedFirst(
+      component,
+      `.${AUTOPLAY_PROGRESS_CLASS}`,
+    );
+
+    if (!autoplayProgressTemplate) {
+      autoplayProgressTemplate = queryScopedFirst(
+        component,
+        "[data-tabs-autoplay-progress]",
+      );
+    }
+
+    if (isAutoplayProgressElement(autoplayProgressList)) {
+      autoplayProgressTemplate = autoplayProgressList;
+      autoplayProgressList = autoplayProgressList.parentElement;
+    }
+
+    if (!autoplayProgressList && autoplayProgressTemplate) {
+      autoplayProgressList = autoplayProgressTemplate.parentElement;
+    }
+
+    if (
+      autoplayProgressList &&
+      !autoplayProgressList.hasAttribute("data-tabs-autoplay-progress-list")
+    ) {
+      autoplayProgressList.setAttribute("data-tabs-autoplay-progress-list", "");
+    }
 
     // Autoplay state
     let autoplayEnabled = tabMenu.getAttribute("data-tabs-autoplay") === "true";
@@ -331,6 +365,7 @@
         autoplayProgressList.__autoplayTabsProgressTemplate;
       const templateSource =
         storedTemplate ||
+        autoplayProgressTemplate ||
         autoplayProgressList.querySelector(`.${AUTOPLAY_PROGRESS_CLASS}`) ||
         autoplayProgressList.querySelector("[data-tabs-autoplay-progress]") ||
         autoplayProgressList.firstElementChild;
