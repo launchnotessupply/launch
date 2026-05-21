@@ -49,6 +49,54 @@
     );
   }
 
+  function getConfigAttribute(component, primaryElement, name) {
+    if (primaryElement && primaryElement.hasAttribute(name)) {
+      return primaryElement.getAttribute(name);
+    }
+
+    if (component.hasAttribute(name)) {
+      return component.getAttribute(name);
+    }
+
+    return null;
+  }
+
+  function getBooleanConfig(component, primaryElement, name, fallback) {
+    const value = getConfigAttribute(component, primaryElement, name);
+
+    if (value === null) return fallback;
+
+    return value === "" || value === "true" || value === name;
+  }
+
+  function getDurationMsConfig(
+    component,
+    primaryElement,
+    name,
+    fallbackMilliseconds,
+  ) {
+    const value = getConfigAttribute(component, primaryElement, name);
+
+    if (value === null) return fallbackMilliseconds;
+
+    const normalizedValue = String(value).trim().toLowerCase();
+    const parsedValue = parseFloat(normalizedValue);
+
+    if (!isFinite(parsedValue) || parsedValue <= 0) {
+      return fallbackMilliseconds;
+    }
+
+    if (normalizedValue.endsWith("ms")) {
+      return parsedValue;
+    }
+
+    if (normalizedValue.endsWith("s")) {
+      return parsedValue * 1000;
+    }
+
+    return parsedValue;
+  }
+
   /**
    * Initialize a single tabs component
    */
@@ -138,16 +186,25 @@
     }
 
     // Autoplay state
-    let autoplayEnabled = tabMenu.getAttribute("data-tabs-autoplay") === "true";
-    const parsedAutoplayDuration = parseFloat(
-      tabMenu.getAttribute("data-tabs-autoplay-duration"),
+    let autoplayEnabled = getBooleanConfig(
+      component,
+      tabMenu,
+      "data-tabs-autoplay",
+      Boolean(autoplayProgressList),
     );
-    let autoplayDuration =
-      isFinite(parsedAutoplayDuration) && parsedAutoplayDuration > 0
-        ? parsedAutoplayDuration
-        : 5;
+    let autoplayDurationMs = getDurationMsConfig(
+      component,
+      tabMenu,
+      "data-tabs-autoplay-duration",
+      5000,
+    );
     let autoplayHoverPause =
-      tabMenu.getAttribute("data-tabs-autoplay-hover-pause") === "true";
+      getBooleanConfig(
+        component,
+        tabMenu,
+        "data-tabs-autoplay-hover-pause",
+        false,
+      );
     let autoplayTimer = null;
     let autoplayObserver = null;
     let isAutoplayPaused = false;
@@ -356,7 +413,7 @@
       // Set CSS variable for duration
       component.style.setProperty(
         "--autoplay-duration",
-        `${autoplayDuration}s`,
+        `${autoplayDurationMs}ms`,
       );
 
       if (!autoplayProgressList) return;
@@ -510,7 +567,7 @@
 
       const remainingTime = Math.max(
         0,
-        autoplayDuration * 1000 - autoplayElapsedTime,
+        autoplayDurationMs - autoplayElapsedTime,
       );
       autoplayStartTime = Date.now();
 
