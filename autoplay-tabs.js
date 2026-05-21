@@ -18,13 +18,27 @@
   function enableMobileDisabledState(component) {
     component.setAttribute("data-tabs-mobile-disabled-active", "true");
 
-    component.querySelectorAll("[data-tabs-pane]").forEach((pane) => {
+    queryScoped(component, "[data-tabs-pane]").forEach((pane) => {
       pane.setAttribute("aria-hidden", "false");
     });
   }
 
   function disableMobileDisabledState(component) {
     component.removeAttribute("data-tabs-mobile-disabled-active");
+  }
+
+  function belongsToTabsComponent(component, element) {
+    return element.closest("[data-tabs-component]") === component;
+  }
+
+  function queryScoped(component, selector) {
+    return Array.from(component.querySelectorAll(selector)).filter((element) =>
+      belongsToTabsComponent(component, element),
+    );
+  }
+
+  function queryScopedFirst(component, selector) {
+    return queryScoped(component, selector)[0] || null;
   }
 
   /**
@@ -39,13 +53,17 @@
       delete component.__tabsCleanup;
     }
 
-    const tabMenu = component.querySelector("[data-tabs-menu]");
-    const dropdownMenu = component.querySelector(
+    const tabMenu = queryScopedFirst(component, "[data-tabs-menu]");
+    const dropdownMenu = queryScopedFirst(
+      component,
       "[data-tabs-menu-dropdown-menu]",
     );
-    const tabMenuWrapper = component.querySelector("[data-tabs-menu-wrapper]");
-    const tabLinks = component.querySelectorAll("[data-tabs-link]");
-    const tabPanes = component.querySelectorAll("[data-tabs-pane]");
+    const tabMenuWrapper = queryScopedFirst(
+      component,
+      "[data-tabs-menu-wrapper]",
+    );
+    const tabLinks = queryScoped(component, "[data-tabs-link]");
+    const tabPanes = queryScoped(component, "[data-tabs-pane]");
 
     if (
       !tabMenu ||
@@ -58,12 +76,13 @@
     }
 
     // Convert NodeLists to arrays once for better performance
-    const tabLinksArray = Array.from(tabLinks);
-    const tabPanesArray = Array.from(tabPanes);
+    const tabLinksArray = tabLinks;
+    const tabPanesArray = tabPanes;
 
     // State
     let currentActiveIndex = 0;
-    let dropdownToggle = tabMenu.querySelector(
+    let dropdownToggle = queryScopedFirst(
+      component,
       "[data-tabs-menu-dropdown-toggle]",
     );
     let dropdownText = dropdownToggle
@@ -73,10 +92,12 @@
       tabMenu.getAttribute("data-tab-mobile-dropdown") === "true";
 
     // Cache autoplay toggle button
-    let autoplayToggleButton = component.querySelector(
+    let autoplayToggleButton = queryScopedFirst(
+      component,
       "[data-tabs-autoplay-toggle]",
     );
-    const autoplayProgressList = component.querySelector(
+    const autoplayProgressList = queryScopedFirst(
+      component,
       "[data-tabs-autoplay-progress-list]",
     );
     let autoplayProgressButtons = [];
@@ -244,8 +265,10 @@
 
       // Set initial text to active tab
       const activeLink =
-        component.querySelector('[data-tabs-link][aria-selected="true"]') ||
-        component.querySelector(`[data-tabs-link].${ACTIVE_CLASS}`) ||
+        tabLinksArray.find(
+          (link) => link.getAttribute("aria-selected") === "true",
+        ) ||
+        tabLinksArray.find((link) => link.classList.contains(ACTIVE_CLASS)) ||
         tabLinksArray[0];
       if (dropdownText && activeLink) {
         const activeTabName = activeLink.getAttribute("data-tab-link-name");
